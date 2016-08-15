@@ -1,0 +1,178 @@
+<?php
+
+/**
+ * Implements hook_og_permission().
+ */
+function node_lock_og_permission() {
+  $items = array();
+
+  $items['lock nodes'] = array(
+    'title' => t('Lock or unlock nodes'),
+    'description' => t('Grants access to lock and unlock content.'),
+    'roles' => array(OG_AUTHENTICATED_ROLE, OG_ADMINISTRATOR_ROLE),
+    'default role' => array(OG_ADMINISTRATOR_ROLE),
+  );
+
+  $items['access locked nodes'] = array(
+    'title' => t('Access locked nodes'),
+    'description' => t('Grants access edit and delete nodes that are locked.'),
+    'roles' => array(OG_AUTHENTICATED_ROLE, OG_ADMINISTRATOR_ROLE),
+    'default role' => array(OG_ADMINISTRATOR_ROLE),
+  );
+
+  return $items;
+}
+
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function node_lock_form_alter(&$form, &$form_state, $form_id){
+
+  if(preg_match('/node_form/',$form_id)) {
+    global $user;
+
+    $access = 0;
+    $change = 0;
+
+    if(isset($form['og_group_ref']['und'][0]['default']['#default_value'][0])) {
+      $gid = $form['og_group_ref']['und'][0]['default']['#default_value'][0];
+
+      if (og_user_access('node', $gid, 'access locked nodes')) {
+        $access = 1;
+      }
+
+      if (og_user_access('node', $gid, 'lock nodes')) {
+        $change = 1;
+      }
+    }
+
+    $node_lock_search = db_select('node_lock_node', 'nid');
+    $node_lock_search->fields('nid');
+    $node_lock_search->condition('nid', $form['nid']['#value'], '=');
+    $current_query = $node_lock_search->execute();
+
+    if($current_query->rowCount()) {
+      $locked = 1;
+    } else {
+      $locked = 0;
+    }
+
+    if($access == 0) {
+      if($form['nid']['#value']) {
+        if($locked == 1) {
+          drupal_set_message(t('This content has been locked by your department/group administrator. You are not permitted to modify or delete this content.'), 'error');
+          drupal_access_denied();
+          exit;
+        }
+      }
+    }
+
+    $can_lock = FALSE;
+    if($change == 1) $can_lock = TRUE;
+
+    $form['node_lock'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Lock'),
+      '#collapsible' => FALSE,
+      '#collapsed' => FALSE,
+      '#access' => $can_lock,
+    );
+
+    $form['node_lock']['lock_this_page'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Lock this content'),
+      '#description' => t('Check this box to prevent non-group administrators from changing or deleting this content.'),
+      '#default_value' => $locked,
+      '#access' => $can_lock,
+    );
+
+  }
+
+  if(preg_match('/node_delete/',$form_id)) {
+    global $user;
+
+    $node  = node_load($form['nid']['#value']);
+
+    $access = 0;
+    $change = 0;
+
+    if(isset($node->og_group_ref['und'][0]['target_id'])) {
+      $gid = $node->og_group_ref['und'][0]['target_id'];
+
+      if (og_user_access('node', $gid, 'access locked nodes')) {
+        $access = 1;
+      }
+
+      if (og_user_access('node', $gid, 'lock nodes')) {
+        $change = 1;
+      }
+    }
+
+    $node_lock_search = db_select('node_lock_node', 'nid');
+    $node_lock_search->fields('nid');
+    $node_lock_search->condition('nid', $form['nid']['#value'], '=');
+    $current_query = $node_lock_search->execute();
+
+    if($current_query->rowCount()) {
+      $locked = 1;
+    } else {
+      $locked = 0;
+    }
+
+    if($access == 0) {
+      if($form['nid']['#value']) {
+        if($locked == 1) {
+          drupal_set_message(t('This content has been locked by your department/group administrator. You are not permitted to modify or delete this content.'), 'error');
+          drupal_access_denied();
+          exit;
+        }
+      }
+    }
+  }
+}
+
+
+/**
+ * Implementation of hook_node_update().
+ */
+function node_lock_node_update($node) {
+  if($node->lock_this_page == 1) {
+    $node_lock_update = db_select('node_lock_node', 'nid');
+    $node_lock_update->fields('nid');
+    $node_lock_update->condition('nid', $node->nid, '=');
+    $current_query = $node_lock_update->execute();
+
+    if(!$current_query->rowCount()) {
+      $result = db_insert('node_lock_node')
+      ->fields(array('nid' => $node->nid,))
+      ->execute();
+    }
+  } else {
+    $result = db_delete('node_lock_node')
+    ->condition('nid', $node->nid)
+    ->execute();
+  }
+}
+
+
+/**
+ * Implementation of hook_node_insert().
+ */
+function node_lock_node_insert($node) {
+  if($node->lock_this_page == 1) {
+    $result = db_insert('node_lock_node')
+    ->fields(array('nid' => $node->nid,))
+    ->execute();
+  }
+}
+
+
+/**
+ * Implementation of hook_node_delete().
+ */
+function node_lock_node_delete($node) {
+  $result = db_delete('node_lock_node')
+  ->condition('nid', $node->nid)
+  ->execute();
+}

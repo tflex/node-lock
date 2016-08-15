@@ -1,0 +1,5 @@
+name = "Node Lock"
+description = "Lock nodes to prevent editing by other users"
+core = 7.x
+package = "uleth custom"
+dependencies[] = "og"

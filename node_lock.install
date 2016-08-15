@@ -1,0 +1,25 @@
+<?php
+/**
+ * Install the Node Lock module.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function node_lock_schema() {
+  // Create database table to record all nodes that should be locked.
+  $schema['node_lock_node'] = array(
+    'description' => 'List of node id numbers of locked nodes.',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('nid'),
+  );
+
+  return $schema;
+
+}
